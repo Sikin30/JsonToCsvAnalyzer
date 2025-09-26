@@ -1,141 +1,233 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
 using System.Linq;
+using System.Text.Json;
 
-class Program
+namespace JsonToCsvAnalyzer
 {
-    static List<Person> people = new();
-
-    static void Main(string[] args)
+    public class Program
     {
-        Console.WriteLine("Enter the path to the JSON file:");
-        string jsonFilePath = Console.ReadLine();
-
-        if (!File.Exists(jsonFilePath))
+        public static void Main(string[] args)
         {
-            Console.WriteLine("File not found!");
-            return;
-        }
-
-        try
-        {
-            string jsonString = File.ReadAllText(jsonFilePath);
-            people = JsonSerializer.Deserialize<List<Person>>(jsonString);
-            Console.WriteLine($"Loaded {people.Count} records.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Error reading or parsing JSON file:");
-            Console.WriteLine(ex.Message);
-            return;
-        }
-
-        RunMenu();
-    }
-    
-    // Placeholder for menu function - will add next
-    static void RunMenu()
-{
-    while (true)
-    {
-        Console.WriteLine("\nMenu:");
-        Console.WriteLine("1. Show total records");
-        Console.WriteLine("2. Filter by Country");
-        Console.WriteLine("3. Show average age");
-        Console.WriteLine("4. Export to CSV");
-        Console.WriteLine("5. Exit");
-        Console.Write("Choose an option: ");
-
-        string choice = Console.ReadLine();
-        switch (choice)
-        {
-            case "1":
-                ShowTotalRecords();
-                break;
-            case "2":
-                FilterByCountry();
-                break;
-            case "3":
-                ShowAverageAge();
-                break;
-            case "4":
-                ExportToCsv();
-                break;
-            case "5":
-                Console.WriteLine("Goodbye!");
+            Console.WriteLine("Enter the path to the JSON file:");
+            string jsonFilePath = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(jsonFilePath) || !File.Exists(jsonFilePath))
+            {
+                Console.WriteLine("File not found or invalid path!");
                 return;
-            default:
-                Console.WriteLine("Invalid option, try again.");
-                break;
+            }
+
+            List<Person> people;
+            try
+            {
+                string jsonString = File.ReadAllText(jsonFilePath);
+                people = JsonSerializer.Deserialize<List<Person>>(jsonString);
+                if (people == null)
+                {
+                    Console.WriteLine("No data found in JSON file.");
+                    return;
+                }
+                Console.WriteLine($"Loaded {people.Count} records.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error reading or parsing JSON file:");
+                Console.WriteLine(ex.Message);
+                return;
+            }
+
+            var analyzer = new PersonAnalyzer(people);
+            var menu = new ConsoleMenu(analyzer);
+            menu.Run();
         }
     }
-}
 
-static void ShowTotalRecords()
-{
-    Console.WriteLine($"Total records: {people.Count}");
-}
-
-static void ShowAverageAge()
-{
-    if (people.Count == 0)
+    public class PersonAnalyzer
     {
-        Console.WriteLine("No data to calculate.");
-        return;
-    }
-    double average = people.Average(p => p.Age);
-    Console.WriteLine($"Average Age: {average:F2}");
-}
+        private readonly List<Person> _originalPeople;
+        private List<Person> _currentPeople;
 
-static void FilterByCountry()
-{
-    Console.Write("Enter country to filter by: ");
-    string country = Console.ReadLine();
-
-    var filtered = people.Where(p => string.Equals(p.Country, country, StringComparison.OrdinalIgnoreCase)).ToList();
-
-    Console.WriteLine($"Found {filtered.Count} records for country: {country}");
-
-    // Replace people with filtered for other operations
-    people = filtered;
-}
-
-static void ExportToCsv()
-{
-    Console.Write("Enter file path to save CSV (e.g., output.csv): ");
-    string csvFilePath = Console.ReadLine();
-
-    try
-    {
-        using var writer = new StreamWriter(csvFilePath);
-        writer.WriteLine("Id,Name,Age,Country");
-
-        foreach (var person in people)
+        public PersonAnalyzer(List<Person> people)
         {
-            string line = $"{person.Id},{EscapeCsv(person.Name)},{person.Age},{EscapeCsv(person.Country)}";
-            writer.WriteLine(line);
+            _originalPeople = new List<Person>(people);
+            _currentPeople = new List<Person>(people);
         }
 
-        Console.WriteLine($"Data exported successfully to {csvFilePath}");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine("Error exporting to CSV:");
-        Console.WriteLine(ex.Message);
-    }
-}
+        public IReadOnlyList<Person> People => _currentPeople;
 
-// Helper to escape commas and quotes in CSV
-static string EscapeCsv(string s)
-{
-    if (s.Contains(",") || s.Contains("\""))
-    {
-        s = s.Replace("\"", "\"\"");
-        s = $"\"{s}\"";
-    }
-    return s;
-}
+        public void ResetFilter()
+        {
+            _currentPeople = new List<Person>(_originalPeople);
+        }
 
+        public void FilterByCountry(string country)
+        {
+            if (string.IsNullOrWhiteSpace(country)) return;
+            _currentPeople = _currentPeople.Where(p => string.Equals(p.Country, country, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        public double? GetAverageAge()
+        {
+            if (_currentPeople.Count == 0) return null;
+            return _currentPeople.Average(p => p.Age);
+        }
+
+        public List<string> GetCountries()
+        {
+            return _originalPeople.Select(p => p.Country).Distinct().OrderBy(c => c).ToList();
+        }
+
+        public void ExportToCsv(string filePath)
+        {
+            using var writer = new StreamWriter(filePath);
+            writer.WriteLine("Id,Name,Age,Country");
+            foreach (var person in _currentPeople)
+            {
+                string line = $"{person.Id},{EscapeCsv(person.Name)},{person.Age},{EscapeCsv(person.Country)}";
+                writer.WriteLine(line);
+            }
+        }
+
+        private string EscapeCsv(string s)
+        {
+            if (s == null) return "";
+            if (s.Contains(",") || s.Contains("\""))
+            {
+                s = s.Replace("\"", "\"\"");
+                s = $"\"{s}\"";
+            }
+            return s;
+        }
+    }
+
+    public class ConsoleMenu
+    {
+        private readonly PersonAnalyzer _analyzer;
+        public ConsoleMenu(PersonAnalyzer analyzer)
+        {
+            _analyzer = analyzer;
+        }
+
+        public void Run()
+        {
+            while (true)
+            {
+                Console.WriteLine("\nMenu:");
+                Console.WriteLine("1. Show all records");
+                Console.WriteLine("2. Show total records");
+                Console.WriteLine("3. Filter by Country");
+                Console.WriteLine("4. Show average age");
+                Console.WriteLine("5. Export to CSV");
+                Console.WriteLine("6. Reset filter");
+                Console.WriteLine("7. Exit");
+                Console.Write("Choose an option: ");
+
+                string choice = Console.ReadLine();
+                switch (choice)
+                {
+                    case "1":
+                        ShowAllRecords();
+                        break;
+                    case "2":
+                        ShowTotalRecords();
+                        break;
+                    case "3":
+                        FilterByCountry();
+                        break;
+                    case "4":
+                        ShowAverageAge();
+                        break;
+                    case "5":
+                        ExportToCsv();
+                        break;
+                    case "6":
+                        _analyzer.ResetFilter();
+                        Console.WriteLine("Filter reset. Showing all records.");
+                        break;
+                    case "7":
+                        Console.WriteLine("Goodbye!");
+                        return;
+                    default:
+                        Console.WriteLine("Invalid option, try again.");
+                        break;
+                }
+            }
+        }
+
+        private void ShowAllRecords()
+        {
+            var people = _analyzer.People;
+            if (people.Count == 0)
+            {
+                Console.WriteLine("No records to display.");
+                return;
+            }
+            foreach (var person in people)
+            {
+                Console.WriteLine($"{person.Id}, {person.Name}, {person.Age}, {person.Country}");
+            }
+        }
+
+        private void ShowTotalRecords()
+        {
+            Console.WriteLine($"Total records: {_analyzer.People.Count}");
+        }
+
+        private void ShowAverageAge()
+        {
+            var avg = _analyzer.GetAverageAge();
+            if (avg == null)
+            {
+                Console.WriteLine("No data to calculate average age.");
+            }
+            else
+            {
+                Console.WriteLine($"Average Age: {avg:F2}");
+            }
+        }
+
+        private void FilterByCountry()
+        {
+            var countries = _analyzer.GetCountries();
+            if (countries.Count == 0)
+            {
+                Console.WriteLine("No country data available.");
+                return;
+            }
+            Console.WriteLine("Available countries:");
+            Console.WriteLine(string.Join(", ", countries));
+            Console.Write("Enter country to filter by: ");
+            string country = Console.ReadLine();
+            if (!countries.Any(c => string.Equals(c, country, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine("Country not found in data.");
+                return;
+            }
+            _analyzer.FilterByCountry(country);
+            Console.WriteLine($"Filter applied. Showing records for country: {country}");
+        }
+
+        private void ExportToCsv()
+        {
+            Console.Write("Enter file path to save CSV (e.g., output.csv): ");
+            string csvFilePath = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(csvFilePath))
+            {
+                Console.WriteLine("Invalid file path.");
+                return;
+            }
+            try
+            {
+                _analyzer.ExportToCsv(csvFilePath);
+                Console.WriteLine($"Data exported successfully to {csvFilePath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error exporting to CSV:");
+                Console.WriteLine(ex.Message);
+            }
+        }
+    }
 }

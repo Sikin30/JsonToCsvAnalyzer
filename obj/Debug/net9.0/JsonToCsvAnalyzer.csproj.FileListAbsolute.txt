@@ -12,3 +12,4 @@ C:\Users\s.tamang\CsharpProjects\JsonToCsvAnalyzer\JsonToCsvAnalyzer\obj\Debug\n
 C:\Users\s.tamang\CsharpProjects\JsonToCsvAnalyzer\JsonToCsvAnalyzer\obj\Debug\net9.0\JsonToCsvAnalyzer.pdb
 C:\Users\s.tamang\CsharpProjects\JsonToCsvAnalyzer\JsonToCsvAnalyzer\obj\Debug\net9.0\JsonToCsvAnalyzer.genruntimeconfig.cache
 C:\Users\s.tamang\CsharpProjects\JsonToCsvAnalyzer\JsonToCsvAnalyzer\obj\Debug\net9.0\ref\JsonToCsvAnalyzer.dll
+C:\Users\s.tamang\CsharpProjects\JsonToCsvAnalyzer\JsonToCsvAnalyzer\obj\Debug\net9.0\JsonToCsvAnalyzer.sourcelink.json
